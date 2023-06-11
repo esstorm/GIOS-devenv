@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+usage() {
+cat <<EOF
+Usage:
+  respawn <binary>
+
+Ensure the binary file is executable
+EOF
+}
+
+_BIN_FILE="$1"
+
+if [[ $# -ne 1 ]] || [[ ! -x "$_BIN_FILE" ]]; then
+  usage
+  exit 1
+fi
+
+until "$_BIN_FILE"; do
+    echo "💀 Server crashed with exit code $?.  Respawning.." >&2
+    sleep 1
+done
