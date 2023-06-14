@@ -2,6 +2,7 @@
 #
 # Wrapper for launching Dockerized devenv
 set -euo pipefail
+SOURCE="$(dirname "${BASH_SOURCE[0]}")"
 
 #===============================================================================
 # Logging
@@ -18,9 +19,9 @@ _logger() {
   local date_time
   date_time="$(date +"%Y/%m/%d %H:%M:%S")"
   printf "${!COLOR:-$NC}"
-  [[ -n "${VERBOSE:-}" ]] && printf "[${date_time}] - [${DBG_LEVEL:-}] - $@"
-  [[ -z "${VERBOSE:-}" ]] && printf "[${DBG_LEVEL:-}] - $@"
-  printf "${NC}\n"
+  [[ -n "${VERBOSE:-}" ]] && printf "[${date_time}] [${DBG_LEVEL:-}]${NC} $@\n"
+  [[ -z "${VERBOSE:-}" ]] && printf "[${DBG_LEVEL:-}]${NC} $@\n"
+  # printf "${NC}\n"
 }
 
 debug() { COLOR=MAGENTA DBG_LEVEL=DEBUG _logger "$@"; }
@@ -32,12 +33,18 @@ fatal() { COLOR=RED DBG_LEVEL=FATAL _logger "💀 $@" >&2; exit 0; }
 #===============================================================================
 
 mountDir="/Users/torres/Uni/CS6200/pr1/gflib"
+tmp="${SOURCE}/tmp"
+bash_history="${SOURCE}/history/.bash_history"
 
 IMAGE="uni/devenv"
 NAME="devenv"
+PCAP_FILE="devenv.pcap"
+PIDS=()
 
 MOUNTS=(
   "-v" "${mountDir}:/app"
+  "-v" "${tmp}:/capture"
+  "-v" "${bash_history}:/root/.bash_history"
 )
 
 VIRT_FLAGS=(
@@ -49,7 +56,20 @@ VIRT_FLAGS=(
 
 PORT_FWDS=(
   "-p" "8888:8888"
+  "-p" "10680:10680"
 )
+
+
+cleanup() {
+  if [[ -n "${PIDS}" ]]; then
+    info "Cleaning up..."
+    info "Removing tcpdump capture PID ${PIDS[*]}"
+    docker exec -i "${NAME}" /bin/sh -c "kill -9 ${PIDS[*]}"
+    docker exec -i "${NAME}" /bin/sh -c "pgrep tcpdump"
+  fi
+}
+
+trap cleanup SIGINT
 
 start_container() {
   if [[ ! $(docker ps --filter "name=^/$NAME$" --format '{{.Names}}') == $NAME ]]; then
@@ -59,15 +79,19 @@ start_container() {
       "${PORT_FWDS[@]}" \
       "${IMAGE}" \
       /bin/bash
+  else
+    warn "Container already running"
   fi
+
+  docker ps --format 'table {{.ID}}\t{{.Command}}\t{{.CreatedAt}}\t{{.Status}}'
 }
 
 stop_container() {
-  docker stop "${NAME}" || warn "Container not running"
+  (docker stop "${NAME}" &>/dev/null && docker rm "${NAME}" &>/dev/null) || warn "Container not running"
 }
 
 restart_container() {
-  stop_container && docker rm "${NAME}"
+  stop_container
   start_container
 }
 
@@ -75,13 +99,39 @@ exec_command() {
   docker exec -it "${NAME}" $@
 }
 
+stop_tcpdump() {
+  pid="$1"
+  docker exec -i "${NAME}" /bin/sh -c "kill -9 $pid"
+}
+
+capture_net() {
+  # iface=lo
+  PIDS+=("$(docker exec -i "${NAME}" /bin/sh -c 'nohup tcpdump -U -w - -i lo 2>/dev/null > /capture/devenv.pcap & echo $!')")
+  tail -f -c +0 "${tmp}/${PCAP_FILE}" | wireshark -k -i -
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --start )
+      info "Starting the devenv container..."
+      start_container
+      exit $?
+      ;;
+    --stop )
+      info "Stopping the devenv container..."
+      stop_container && info "Container stopped successfully"
+      exit $?
+      ;;
     --restart )
       info "Restarting container"
       shift 1
       restart_container
       exit $?
+      ;;
+    --capture)
+      info "Starting network capture"
+      capture_net
+      exit
       ;;
     -h | --help)
       echo "Devenv script"

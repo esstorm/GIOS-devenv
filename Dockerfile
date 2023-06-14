@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3 \
     python3-dev \
     python3-pip \
+    tcpdump \
     rpcbind \
     valgrind
 
