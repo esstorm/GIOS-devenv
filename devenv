@@ -32,7 +32,7 @@ fatal() { COLOR=RED DBG_LEVEL=FATAL _logger "💀 $@" >&2; exit 0; }
 
 #===============================================================================
 
-mountDir="/Users/torres/Uni/CS6200/pr1/gflib"
+mountDir="${HOME}/Uni/CS6200/pr1/"
 tmp="${SOURCE}/tmp"
 bash_history="${SOURCE}/history/.bash_history"
 
@@ -40,6 +40,7 @@ IMAGE="uni/devenv"
 NAME="devenv"
 PCAP_FILE="devenv.pcap"
 PIDS=()
+WORKDIR="/app/gflib"
 
 MOUNTS=(
   "-v" "${mountDir}:/app"
@@ -96,7 +97,7 @@ restart_container() {
 }
 
 exec_command() {
-  docker exec -it "${NAME}" $@
+  docker exec -it -w "${WORKDIR}" "${NAME}" $@
 }
 
 stop_tcpdump() {
@@ -106,7 +107,7 @@ stop_tcpdump() {
 
 capture_net() {
   # iface=lo
-  PIDS+=("$(docker exec -i "${NAME}" /bin/sh -c 'nohup tcpdump -U -w - -i lo 2>/dev/null > /capture/devenv.pcap & echo $!')")
+  PIDS+=("$(docker exec -i "${NAME}" /bin/sh -c 'nohup tcpdump -U -w - -i any 2>/dev/null > /capture/devenv.pcap & echo $!')")
   tail -f -c +0 "${tmp}/${PCAP_FILE}" | wireshark -k -i -
 }
 
