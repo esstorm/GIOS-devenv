@@ -32,7 +32,7 @@ fatal() { COLOR=RED DBG_LEVEL=FATAL _logger "💀 $@" >&2; exit 0; }
 
 #===============================================================================
 
-mountDir="${HOME}/Uni/CS6200/pr1/"
+MOUNTDIR="${MOUNTDIR:-${HOME}/Uni/CS6200/pr3/}"
 tmp="${SOURCE}/tmp"
 bash_history="${SOURCE}/history/.bash_history"
 
@@ -40,10 +40,10 @@ IMAGE="uni/devenv"
 NAME="devenv"
 PCAP_FILE="devenv.pcap"
 PIDS=()
-WORKDIR="/app/gflib"
+WORKDIR="/app"
 
 MOUNTS=(
-  "-v" "${mountDir}:/app"
+  "-v" "${MOUNTDIR}:/app"
   "-v" "${tmp}:/capture"
   "-v" "${bash_history}:/root/.bash_history"
 )
@@ -111,31 +111,43 @@ capture_net() {
   tail -f -c +0 "${tmp}/${PCAP_FILE}" | wireshark -k -i -
 }
 
+usage() {
+cat <<EOF
+Usage: $(basename $0) <command> [<flags>]
+
+Commands:
+  start
+  stop
+  restart
+  capture
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --start )
+    start )
       info "Starting the devenv container..."
       start_container
       exit $?
       ;;
-    --stop )
+    stop )
       info "Stopping the devenv container..."
       stop_container && info "Container stopped successfully"
       exit $?
       ;;
-    --restart )
+    restart )
       info "Restarting container"
       shift 1
       restart_container
       exit $?
       ;;
-    --capture)
+    capture)
       info "Starting network capture"
       capture_net
       exit
       ;;
     -h | --help)
-      echo "Devenv script"
+      usage
       exit 2
       ;;
     --)
